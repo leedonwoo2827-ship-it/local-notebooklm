@@ -169,6 +169,7 @@ VPS 이전 시 `WHISPER_BACKEND=litellm` 만 바꾸면 GPU 없는 환경에서�
 |---|---|
 | `python을 찾을 수 없습니다` | [Python 3.10+](https://www.python.org/downloads/) 설치 시 "Add Python to PATH" 체크 |
 | `LibreOffice를 찾을 수 없습니다` | HWPX 안 쓰면 무시. 쓰려면 [LibreOffice](https://www.libreoffice.org/download/) 설치 |
+| `WinError 1314` / `Mineru command failed` (Windows) | **Windows 개발자 모드 켜기** — `Windows 키` → "개발자용 설정" → "개발자 모드" 토글 ON. huggingface가 모델 캐시할 때 symlink 권한이 필요해서 발생. 활성화 후 `run.bat` 재실행 |
 | `401 Unauthorized` | ⚙️ 설정에서 키/URL 다시 확인. 저장 후 새로고침 |
 | 첫 PDF 인덱싱이 5–10분 | MinerU OCR/레이아웃 분석 정상 동작. 두 번째부터는 캐시 사용 |
 | 디스크 부족 | 모델 자동 다운로드로 ~15 GB 사용. 외장 SSD에 폴더 두고 작업해도 OK |
