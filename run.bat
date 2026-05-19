@@ -10,6 +10,13 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
+if not exist ".venv\Scripts\streamlit.exe" (
+    echo [ERROR] Streamlit is not installed in .venv.
+    echo         Run setup.bat first to install dependencies.
+    pause
+    exit /b 1
+)
+
 if not exist ".env" (
     copy .env.example .env >nul
 )
@@ -19,6 +26,11 @@ echo To stop: press Ctrl+C in this window.
 echo.
 
 call .venv\Scripts\activate.bat
-streamlit run app.py
+.venv\Scripts\streamlit.exe run app.py
 
+echo.
+echo ============================================================
+echo  Streamlit has exited. (See messages above for any errors.)
+echo ============================================================
+pause
 endlocal
