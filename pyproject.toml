@@ -1,0 +1,32 @@
+[project]
+name = "local-notebooklm"
+version = "0.1.0"
+description = "Local NotebookLM-style 3-panel app built on RAG-Anything (LightRAG)"
+requires-python = ">=3.10"
+dependencies = [
+    "raganything[all]",
+    "streamlit>=1.32",
+    "sentence-transformers>=2.7",
+    "torch",
+    "faster-whisper>=1.0",
+    "moviepy>=1.0.3",
+    "python-docx>=1.1",
+    "pypdf>=4.0",
+    "openai>=1.40",
+    "python-dotenv>=1.0",
+    "pydantic>=2.5",
+    "srt>=3.5",
+    "webvtt-py>=0.5",
+    "genanki>=0.13",
+    "tenacity>=8.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "ruff"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["core", "core.ingest", "studio", "ui"]

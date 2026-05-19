@@ -1,0 +1,36 @@
+# 환경/시크릿
+.env
+.env.local
+*.key
+
+# 가상환경
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# 사용자 데이터 (절대 git에 올리지 말 것)
+_context/
+_assests/
+data/notebooks/*/rag_storage/
+data/notebooks/*/sources/
+data/notebooks/*/artifacts/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
