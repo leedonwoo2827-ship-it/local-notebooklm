@@ -10,6 +10,52 @@ PDF / Docx / TXT / HWPX / SRT / VTT / MP4 를 소스로 받아, **Citation Q&A**
 
 ---
 
+## 💻 권장 사양
+
+| 항목 | 최소 | 권장 | 비고 |
+|---|---|---|---|
+| **OS** | Windows 10 · macOS 12 · Ubuntu 20.04 | Windows 11 · macOS 14 · Ubuntu 22.04 | |
+| **Python** | 3.10 | 3.11 / 3.12 | 설치 시 "Add Python to PATH" 체크 |
+| **RAM** | 8 GB | 16 GB | PDF 5–10개 동시 인덱싱 시 12 GB 권장 |
+| **디스크** | **15 GB 여유** | 30 GB | 의존성·모델·노트북 인덱스 누적 |
+| **GPU** | 없어도 됨 | RTX 3060 6 GB+ (선택) | CPU만으로도 동작. GPU 있으면 STT/임베딩 5–10배 빠름 |
+| **인터넷** | 필수 | — | 최초 모델 다운로드 + LiteLLM 프록시 호출 |
+
+### 디스크 사용량 (최초 설치 후)
+
+| 구성 요소 | 크기 |
+|---|---|
+| Python venv + 의존성 (`raganything[all]`, `torch` 등) | ~6–8 GB |
+| BGE-M3 임베딩 모델 (BAAI/bge-m3, 최초 사용 시 자동 다운로드) | ~2.3 GB |
+| MinerU 파서 모델 (PDF 레이아웃·OCR, 최초 사용 시 자동 다운로드) | ~3–4 GB |
+| faster-whisper 모델 (CPU = small ~500 MB, GPU = large-v3 ~3 GB) | 0.5–3 GB |
+| LibreOffice (HWPX 변환 시만 필요, 선택) | ~700 MB |
+| 노트북별 인덱스 (`data/notebooks/`) | 노트북 1개 = PDF 5권 기준 ~100–300 MB |
+
+### 🖥️ GPU 없는 일반 사무용 PC라면
+
+기본 설정이 이미 CPU에 맞춰져 있어 **그대로 사용 가능**합니다. 다만 다음 두 줄을 `.env`에 두면 더 가볍게 돌아갑니다:
+
+```
+EMBED_DEVICE=cpu              # 임베딩을 명시적으로 CPU 사용
+WHISPER_BACKEND=litellm       # STT를 회사 프록시로 보냄 (로컬 자원 0)
+```
+
+성능 체감 (Intel i5 노트북 / RAM 16 GB 기준):
+- 임베딩(BGE-M3 CPU): PDF 1권(50쪽) ≈ 1–2분
+- STT 5분 영상: 로컬 small ≈ 3분 / LiteLLM gpt-4o-transcribe ≈ 30초
+- 채팅 응답: LiteLLM 프록시로 처리되므로 PC 사양 무관 (1–3초)
+
+### ⚡ GPU가 있다면
+
+자동으로 인식되어 BGE-M3 임베딩과 faster-whisper가 CUDA에서 동작합니다. 별도 설정 불필요. 만약 PyTorch가 CPU 빌드로 잘못 깔렸다면:
+
+```
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+---
+
 ## 🚀 빠른 설치 (Windows)
 
 폴더를 받은 뒤 더블클릭만 하면 됩니다.
@@ -125,7 +171,9 @@ VPS 이전 시 `WHISPER_BACKEND=litellm` 만 바꾸면 GPU 없는 환경에서�
 | `LibreOffice를 찾을 수 없습니다` | HWPX 안 쓰면 무시. 쓰려면 [LibreOffice](https://www.libreoffice.org/download/) 설치 |
 | `401 Unauthorized` | ⚙️ 설정에서 키/URL 다시 확인. 저장 후 새로고침 |
 | 첫 PDF 인덱싱이 5–10분 | MinerU OCR/레이아웃 분석 정상 동작. 두 번째부터는 캐시 사용 |
-| 임베딩이 느림 (CPU) | `pip install torch --index-url https://download.pytorch.org/whl/cu121` 로 CUDA 빌드 |
+| 디스크 부족 | 모델 자동 다운로드로 ~15 GB 사용. 외장 SSD에 폴더 두고 작업해도 OK |
+| CPU에서 STT 느림 | `.env`의 `WHISPER_BACKEND=litellm` 로 변경 → 프록시로 위임 |
+| 임베딩이 느림 (CPU) | `pip install torch --index-url https://download.pytorch.org/whl/cu121` 로 CUDA 빌드 (GPU 있을 때만) |
 
 ---
 
