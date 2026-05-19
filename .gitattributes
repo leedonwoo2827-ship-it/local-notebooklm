@@ -1,0 +1,8 @@
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF or cmd.exe won't parse them
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell scripts must keep LF or bash will fail on Windows-edited files
+*.sh text eol=lf
