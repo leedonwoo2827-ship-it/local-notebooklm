@@ -16,8 +16,8 @@ PDF / Docx / TXT / HWPX / SRT / VTT / MP4 를 소스로 받아, **Citation Q&A**
 
 | 단계 | 파일 | 비고 |
 |---|---|---|
-| ① 설치 | **`설치.bat`** 더블클릭 | venv 생성 + 의존성 설치 (10–15분, 1회) |
-| ② 실행 | **`실행.bat`** 더블클릭 | 브라우저가 자동으로 열림 (`http://localhost:8501`) |
+| ① 설치 | **`setup.bat`** 더블클릭 | venv 생성 + 의존성 설치 (10–15분, 1회) |
+| ② 실행 | **`run.bat`** 더블클릭 | 브라우저가 자동으로 열림 (`http://localhost:8501`) |
 | ③ 키 입력 | 화면 우상단 **⚙️ 클릭** | 회사에서 발급받은 URL + API 키 2칸 입력 후 저장 |
 
 종료는 검은 창에서 `Ctrl+C`.
@@ -89,7 +89,7 @@ prompts/my_artifact_ko.md    # 프롬프트 본문
 
 ```
 local-notebooklm/
-├── 설치.bat / 실행.bat            ← Windows 더블클릭
+├── setup.bat / run.bat            ← Windows 더블클릭
 ├── setup.sh / run.sh              ← macOS · Linux
 ├── app.py                         ← Streamlit 엔트리
 ├── core/                          ← LLM · 임베딩 · RAG · STT · ingest

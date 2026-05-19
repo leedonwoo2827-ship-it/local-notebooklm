@@ -1,14 +1,13 @@
 @echo off
 setlocal
 
-cd /d "%~dp0\.."
+cd /d "%~dp0"
 
 echo ============================================================
 echo  Local NotebookLM - Setup (Windows)
 echo ============================================================
 echo.
 
-REM 1) Python check
 where python >nul 2>nul
 if errorlevel 1 (
     echo [ERROR] Python is not installed.
@@ -21,7 +20,6 @@ if errorlevel 1 (
 for /f "tokens=2" %%v in ('python --version 2^>^&1') do set PYVER=%%v
 echo [1/4] Python %PYVER% detected.
 
-REM 2) Virtual environment
 if exist ".venv\Scripts\python.exe" (
     echo [2/4] Virtual environment already exists. Skipping.
 ) else (
@@ -34,7 +32,6 @@ if exist ".venv\Scripts\python.exe" (
     )
 )
 
-REM 3) Install dependencies
 echo [3/4] Installing dependencies (may take 10-15 minutes) ...
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip >nul
@@ -45,17 +42,16 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM 4) Prepare .env
 if exist ".env" (
     echo [4/4] .env already exists.
 ) else (
     copy .env.example .env >nul
-    echo [4/4] Created .env from .env.example. Enter URL/key from the in-app gear icon.
+    echo [4/4] Created .env from .env.example.
 )
 
 echo.
 echo ============================================================
-echo  Setup complete. Now double-click  실행.bat  (or scripts\run.bat).
+echo  Setup complete. Now double-click  run.bat
 echo ============================================================
 echo.
 pause
