@@ -155,9 +155,12 @@ local-notebooklm/
 | `UBION_LITELLM_KEY` | (빈칸) | API 키 — ⚙️에서 입력 |
 | `LLM_BACKEND` | `litellm` | `litellm` 또는 `ollama`(완전 로컬) |
 | `WHISPER_BACKEND` | `local` | `local`(faster-whisper) 또는 `litellm` |
-| `MODEL_CHAT` | `deepseek-v4-flash` | 일반 채팅 |
-| `MODEL_STRONG` | `claude-sonnet-4-6` | 보고서·심층 Q&A |
+| `MODEL_CHAT` | `deepseek-v4-flash` | 일반 채팅 (저렴 모드 기본) |
+| `MODEL_STRONG` | `deepseek-v4-flash` | 보고서·심층 Q&A — 품질↑ 원하면 `claude-sonnet-4-6` |
+| `MODEL_CREATIVE` | `deepseek-v4-flash` | Studio 슬라이드/창작 — 품질↑ 원하면 `claude-sonnet-4-6` |
 | `EMBED_MODEL` | `BAAI/bge-m3` | 로컬 임베딩 (고정 권장) |
+
+> 비용·모델별 추천 프로파일은 [docs/pricing.md](docs/pricing.md) 참고.
 
 VPS 이전 시 `WHISPER_BACKEND=litellm` 만 바꾸면 GPU 없는 환경에서도 동일 코드 동작.
 
