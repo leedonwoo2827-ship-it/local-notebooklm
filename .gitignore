@@ -24,6 +24,9 @@ _assests/
 data/notebooks/*/rag_storage/
 data/notebooks/*/sources/
 data/notebooks/*/artifacts/
+output/
+*.transcript.txt
+*.plain.txt
 
 # OS
 .DS_Store

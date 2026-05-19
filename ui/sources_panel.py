@@ -6,7 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from core.ingest.hwpx import hwpx_to_pdf, HwpxConversionError
+from core.ingest.hwpx import hwpx_to_pdf
 from core.ingest.media import is_media, media_to_text
 from core.rag import NotebookPaths, build_rag, list_notebooks, list_sources
 
@@ -80,23 +80,35 @@ def _ingest_uploads(files, paths: NotebookPaths) -> None:
 
 
 async def _post_process(target: Path, paths: NotebookPaths) -> None:
-    """업로드 후 즉시 RAG 인입까지 끝낸다."""
+    """업로드 후 즉시 RAG 인입까지 끝낸다.
+
+    텍스트 계열(VTT/SRT/TXT/MD/STT 결과)은 MinerU 비전 모델을 우회하고
+    `insert_content_list`로 직접 인입한다 — CPU PC에서 page당 54초가
+    page당 1-2초로 떨어진다. PDF/Docx/HWPX(변환후)만 MinerU 거침.
+    """
     rag = await build_rag(paths.name)
 
     if target.suffix.lower() == ".hwpx":
-        try:
-            target = hwpx_to_pdf(target, paths.sources)
-        except HwpxConversionError as e:
-            raise
+        target = hwpx_to_pdf(target, paths.sources)
 
     if is_media(target):
         target = await media_to_text(target, paths.sources)
 
     if target.suffix.lower() in {".srt", ".vtt"}:
         from core.ingest.subtitle import parse_subtitle
-        clean = parse_subtitle(target)
-        txt = target.with_suffix(".plain.txt")
-        txt.write_text(clean, encoding="utf-8")
-        target = txt
+        text = parse_subtitle(target)
+        await rag.insert_content_list(
+            [{"type": "text", "text": text, "page_idx": 0}],
+            file_path=target.name,
+        )
+        return
+
+    if target.suffix.lower() in {".txt", ".md"}:
+        text = target.read_text(encoding="utf-8", errors="ignore")
+        await rag.insert_content_list(
+            [{"type": "text", "text": text, "page_idx": 0}],
+            file_path=target.name,
+        )
+        return
 
     await rag.process_document_complete(file_path=str(target))
