@@ -61,19 +61,23 @@ async def build_rag(notebook_name: str) -> RAGAnything:
         if key in _instances:
             return _instances[key]
 
+        # 본 앱은 OCR/멀티모달 의존 경로를 의도적으로 끈다.
+        # 자막·PDF(text)·docx·md·txt 만 입력으로 받고, LightRAG 의 텍스트 KG/벡터
+        # 파이프라인만 사용한다. enable_*_processing 을 켜면 RAGAnything 이
+        # 자막조차 멀티모달 분기로 보내 KG 가 비어버린다 (자세한 증상은
+        # `_post_process` / `kv_store_doc_status` 의 multimodal_processed=true 참고).
         config = RAGAnythingConfig(
             working_dir=str(paths.rag_storage),
-            parser="mineru",
+            parser="mineru",  # ENABLE_MINERU=true 일 때만 우리 코드가 호출한다.
             parse_method="auto",
-            enable_image_processing=True,
-            enable_table_processing=True,
-            enable_equation_processing=True,
+            enable_image_processing=False,
+            enable_table_processing=False,
+            enable_equation_processing=False,
         )
 
         # vision_model_func 는 의도적으로 넘기지 않는다.
         # 넘기면 RAGAnything.aquery 가 자동으로 VLM 분기로 빠지면서
         # 자막/텍스트만 있는 쿼리에서 _process_image_paths_for_vlm 이 None을 받아 터진다.
-        # PDF 멀티모달 캡셔닝이 필요해지면 그때 옵션으로 추가.
         rag = RAGAnything(
             config=config,
             llm_model_func=get_llm_func("extract"),
@@ -94,6 +98,18 @@ def list_notebooks() -> list[str]:
     return sorted(
         p.name for p in root.iterdir() if p.is_dir() and (p / "rag_storage").exists()
     )
+
+
+async def ainsert_text(rag: RAGAnything, text: str, file_name: str) -> None:
+    """LightRAG 의 텍스트 KG/벡터 파이프라인에 직접 인제스트.
+
+    RAGAnything.insert_content_list 는 멀티모달 진입점이라 자막 같은 평문도
+    `multimodal_processed=true` 만 찍고 KG 파이프라인을 건너뛴다. 그래서
+    이쪽 helper 가 lightrag.ainsert 를 직접 호출한다.
+    """
+    if not text.strip():
+        raise RuntimeError("추출된 텍스트가 비어있습니다.")
+    await rag.lightrag.ainsert(input=text, file_paths=file_name)
 
 
 def list_sources(notebook_name: str) -> list[Path]:

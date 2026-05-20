@@ -1,14 +1,16 @@
 """좌측 출처(Sources) 패널 — 파일 업로드 + 소스 목록 + 노트북 선택/생성."""
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import streamlit as st
 
+from core.async_runtime import run as run_async
 from core.ingest.hwpx import hwpx_to_pdf
 from core.ingest.media import is_media, media_to_text
-from core.rag import NotebookPaths, build_rag, list_notebooks, list_sources
+from core.ingest.text_extract import docx_to_text, pdf_to_text
+from core.rag import NotebookPaths, ainsert_text, build_rag, list_notebooks, list_sources
+from core.settings import SETTINGS
 
 SUPPORTED_EXTENSIONS = [
     "pdf", "docx", "txt", "md", "hwpx",
@@ -81,20 +83,26 @@ def _ingest_uploads(files, paths: NotebookPaths) -> None:
         progress.write(f"저장: {f.name}")
 
         try:
-            asyncio.run(_post_process(target, paths))
+            run_async(_post_process(target, paths))
         except Exception as e:
             st.error(f"{f.name} 처리 실패: {e}")
             continue
 
-    progress.success(f"{len(files)}개 소스 처리 완료. 인덱싱은 채팅 시작 시 진행됩니다.")
+    progress.success(f"{len(files)}개 소스 처리 완료.")
 
 
 async def _post_process(target: Path, paths: NotebookPaths) -> None:
     """업로드 후 즉시 RAG 인입까지 끝낸다.
 
-    텍스트 계열(VTT/SRT/TXT/MD/STT 결과)은 MinerU 비전 모델을 우회하고
-    `insert_content_list`로 직접 인입한다 — CPU PC에서 page당 54초가
-    page당 1-2초로 떨어진다. PDF/Docx/HWPX(변환후)만 MinerU 거침.
+    본 앱은 OCR/멀티모달 분기를 의도적으로 끄고 LightRAG 의 텍스트 KG 파이프라인만
+    사용한다. 따라서 입력은 모두 텍스트 추출이 가능한 형식이어야 한다:
+      · 자막 (srt/vtt) / 평문 (txt/md)
+      · PDF (텍스트 추출 가능본 — pypdf)
+      · Docx (python-docx)
+      · HWPX → PDF 변환 후 텍스트 추출
+      · MP4/m4a/mp3/wav/webm/mov → Whisper STT 후 텍스트
+
+    스캔/이미지 PDF 는 미지원. (외부 OCR 로 .txt 만들어 다시 올리도록 안내)
     """
     rag = await build_rag(paths.name)
 
@@ -104,21 +112,25 @@ async def _post_process(target: Path, paths: NotebookPaths) -> None:
     if is_media(target):
         target = await media_to_text(target, paths.sources)
 
-    if target.suffix.lower() in {".srt", ".vtt"}:
+    ext = target.suffix.lower()
+    if ext in {".srt", ".vtt"}:
         from core.ingest.subtitle import parse_subtitle
         text = parse_subtitle(target)
-        await rag.insert_content_list(
-            [{"type": "text", "text": text, "page_idx": 0}],
-            file_path=target.name,
-        )
-        return
-
-    if target.suffix.lower() in {".txt", ".md"}:
+    elif ext in {".txt", ".md"}:
         text = target.read_text(encoding="utf-8", errors="ignore")
-        await rag.insert_content_list(
-            [{"type": "text", "text": text, "page_idx": 0}],
-            file_path=target.name,
-        )
-        return
+    elif ext == ".pdf":
+        if SETTINGS.enable_mineru:
+            await rag.process_document_complete(file_path=str(target))
+            return
+        text = pdf_to_text(target)
+        if not text.strip():
+            raise RuntimeError(
+                "PDF 에서 텍스트를 추출하지 못했습니다 (스캔/이미지 PDF 로 추정). "
+                "외부 OCR 로 .txt 를 만들어 다시 업로드해 주세요."
+            )
+    elif ext == ".docx":
+        text = docx_to_text(target)
+    else:
+        raise RuntimeError(f"지원하지 않는 형식: {ext}")
 
-    await rag.process_document_complete(file_path=str(target))
+    await ainsert_text(rag, text, target.name)

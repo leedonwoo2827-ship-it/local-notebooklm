@@ -3,6 +3,8 @@
 NotebookLM 스타일 3-패널 로컬 웹 앱.
 PDF / Docx / TXT / HWPX / SRT / VTT / MP4 를 소스로 받아, **Citation Q&A** 와 **Studio 산출물**(보고서·슬라이드·마인드맵·플래시카드·퀴즈 …) 을 생성합니다.
 
+> ⚠️ 입력 소스는 텍스트가 이미 추출되는 포맷만 지원합니다 — PDF(텍스트 추출 가능한 것) / Docx / Md / Txt / SRT · VTT / MP4(STT). 스캔/이미지 PDF 는 외부 OCR 로 텍스트를 추출해 `.txt` 로 넣어주세요. (필요 시 `.env` 의 `ENABLE_MINERU=true` 로 MinerU OCR 분기를 켤 수 있지만 기본은 OFF — CPU PC 부담과 멀티모달 quirk 회피용 결정)
+
 - 본체: [HKUDS/RAG-Anything](https://github.com/HKUDS/RAG-Anything) (LightRAG)
 - LLM: 사내/외부 LiteLLM 프록시 → DeepSeek / Claude / GPT 라우팅
 - 임베딩: 로컬 BGE-M3 (다국어)

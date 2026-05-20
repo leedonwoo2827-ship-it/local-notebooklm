@@ -22,6 +22,7 @@ dependencies = [
     "python-pptx>=0.6.23",
     "playwright>=1.40",
     "jinja2>=3.1",
+    'pywin32>=306; sys_platform == "win32"',
 ]
 
 [project.optional-dependencies]

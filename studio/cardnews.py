@@ -50,15 +50,13 @@ HTML_TEMPLATE = """<!doctype html>
   html, body { margin: 0; padding: 0; }
   body {
     width: {{ width }}px;
-    min-height: {{ height }}px;
     font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
     background: #f6f8fc;
     color: #181b2c;
   }
   .card {
     width: {{ width }}px;
-    min-height: {{ height }}px;
-    padding: 56px 56px 40px;
+    padding: 56px 56px 56px;
     background: linear-gradient(180deg, #f6f8fc 0%, #eef2f8 100%);
   }
   .hero {
@@ -135,7 +133,6 @@ HTML_TEMPLATE = """<!doctype html>
     color: #fff;
     border-radius: 18px;
     padding: 24px 28px;
-    margin-bottom: 18px;
   }
   .summary .label {
     font-size: 18px;
@@ -153,12 +150,6 @@ HTML_TEMPLATE = """<!doctype html>
   }
   .summary .pill .ic { font-size: 28px; display: block; margin-bottom: 6px; }
   .summary .pill .tx { font-size: 13px; color: #d6def4; line-height: 1.3; }
-  .footer {
-    text-align: right;
-    font-size: 12px;
-    color: #6b7280;
-    margin-top: 8px;
-  }
 </style>
 </head>
 <body>
@@ -198,8 +189,6 @@ HTML_TEMPLATE = """<!doctype html>
       </div>
     </div>
     {% endif %}
-
-    {% if footer %}<div class="footer">{{ footer }}</div>{% endif %}
   </div>
 </body>
 </html>

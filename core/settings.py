@@ -44,6 +44,8 @@ class Settings:
 
     notebook_root: Path
 
+    enable_mineru: bool
+
     def model_for(self, profile: Profile) -> str:
         return {
             "chat": self.model_chat,
@@ -82,6 +84,7 @@ def load() -> Settings:
         whisper_model_cuda=_env("WHISPER_MODEL_CUDA", "large-v3"),
         whisper_model_cpu=_env("WHISPER_MODEL_CPU", "small"),
         notebook_root=Path(_env("NOTEBOOK_ROOT", "./data/notebooks")).resolve(),
+        enable_mineru=_env("ENABLE_MINERU", "false").lower() in {"1", "true", "yes", "on"},
     )
 
 

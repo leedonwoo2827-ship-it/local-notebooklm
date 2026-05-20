@@ -1,10 +1,9 @@
 """중앙 Citation 채팅 패널."""
 from __future__ import annotations
 
-import asyncio
-
 import streamlit as st
 
+from core.async_runtime import run as run_async
 from core.rag import build_rag, list_sources
 from studio._base import load_prompt
 
@@ -37,7 +36,7 @@ def render() -> None:
     with st.chat_message("assistant"):
         placeholder = st.empty()
         with st.spinner("답변 생성 중..."):
-            answer = asyncio.run(_query(notebook_name, prompt))
+            answer = run_async(_query(notebook_name, prompt))
         placeholder.markdown(answer)
 
     history.append({"role": "assistant", "content": answer})
