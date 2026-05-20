@@ -126,8 +126,25 @@ async def make_slides_lite(
 
 
 # ── PPTX 렌더링 ───────────────────────────────────────────────────────
+def _resolve_template_path() -> Path | None:
+    """회사 양식 파일 경로. 우선순위:
+    1) 환경변수 PPTX_TEMPLATE_PATH (절대/상대 경로)
+    2) 프로젝트 루트의 assets/pptx_template.pptx
+    파일이 실제 존재할 때만 반환, 없으면 None → 빈 Presentation 으로 폴백.
+    스펙: docs/pptx_template_spec.md
+    """
+    import os
+    env_path = os.environ.get("PPTX_TEMPLATE_PATH", "").strip()
+    if env_path:
+        p = Path(env_path)
+        if p.exists():
+            return p
+    default = Path(__file__).resolve().parent.parent / "assets" / "pptx_template.pptx"
+    return default if default.exists() else None
+
+
 def _render_pptx(bundle: dict, out_path: Path) -> Path:
-    """python-pptx 로 PPTX 파일 생성. 고정 디자인 테마 적용."""
+    """python-pptx 로 PPTX 파일 생성. 회사 양식(있으면) 우선, 없으면 내장 테마."""
     from pptx import Presentation
     from pptx.util import Inches, Pt, Emu
     from pptx.dml.color import RGBColor
@@ -135,12 +152,23 @@ def _render_pptx(bundle: dict, out_path: Path) -> Path:
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    prs = Presentation()
-    prs.slide_width = Inches(13.333)   # 16:9
-    prs.slide_height = Inches(7.5)
+    template_path = _resolve_template_path()
+    if template_path:
+        prs = Presentation(str(template_path))
+        # 양식에 샘플 슬라이드가 들어있을 수 있어 모두 비운다 — 마스터/레이아웃만 유지.
+        xml_slides = prs.slides._sldIdLst  # noqa: SLF001
+        for sld in list(xml_slides):
+            xml_slides.remove(sld)
+    else:
+        prs = Presentation()
+        prs.slide_width = Inches(13.333)   # 16:9
+        prs.slide_height = Inches(7.5)
     SW, SH = prs.slide_width, prs.slide_height
 
-    blank = prs.slide_layouts[6]
+    # 양식이 있으면 마스터의 첫 두 레이아웃(표지/본문)을 사용. 없으면 blank=레이아웃 6.
+    blank = prs.slide_layouts[6] if not template_path else prs.slide_layouts[
+        min(1, len(prs.slide_layouts) - 1)
+    ]
 
     # ─ 표지 ─
     title_slide = prs.slides.add_slide(blank)
