@@ -162,6 +162,7 @@ local-notebooklm/
 
 > 비용·모델별 추천 프로파일은 [docs/pricing.md](docs/pricing.md) 참고.
 > 회사 PPTX 양식 적용 가이드(디자인팀 전달용)는 [docs/pptx_template_spec.md](docs/pptx_template_spec.md) 참고.
+> 회사 HWPX 보고서 양식 가이드는 [docs/hwpx_template_spec.md](docs/hwpx_template_spec.md) 참고 (보고서 HWPX 출력은 향후 패치 예정).
 
 VPS 이전 시 `WHISPER_BACKEND=litellm` 만 바꾸면 GPU 없는 환경에서도 동일 코드 동작.
 
