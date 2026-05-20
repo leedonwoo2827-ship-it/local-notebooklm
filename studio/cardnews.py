@@ -281,8 +281,11 @@ async def capture_png(html: str, png_path: Path, width: int = CARD_WIDTH, height
     """HTML 문자열 → PNG 캡처. `.card` 박스를 측정해 콘텐츠 높이에 정확히 맞춘다.
 
     `viewport.height` 를 그대로 캡처할 경우 콘텐츠보다 viewport 가 크면
-    하단에 빈 영역이 그대로 PNG 에 들어간다. 그래서 두 단계로 처리:
-      1) viewport.height 를 작게(=콘텐츠가 자연스럽게 늘어나도록) 두고
+    하단에 빈 영역이 그대로 PNG 에 들어간다. 또 viewport 가 너무 작으면
+    documentElement.scrollHeight 가 viewport 를 따라가는 quirk 로 .card
+    측정이 viewport.height 에 갇혀 PNG 콘텐츠가 잘려나간다. 그래서:
+      1) viewport.height 를 콘텐츠 예상 최대치보다 크게(3000) 두어 layout
+         이 자연스럽게 끝나도록
       2) `.card` 박스의 bounding rect 을 측정해 그 영역만 clip 캡처.
     """
     from playwright.async_api import async_playwright
@@ -294,7 +297,7 @@ async def capture_png(html: str, png_path: Path, width: int = CARD_WIDTH, height
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         ctx = await browser.new_context(
-            viewport={"width": width, "height": 600},  # 콘텐츠가 자연 확장하도록 작은 초기값
+            viewport={"width": width, "height": 3000},  # 콘텐츠 예상 max 보다 큰 viewport
             device_scale_factor=2,
         )
         page = await ctx.new_page()
