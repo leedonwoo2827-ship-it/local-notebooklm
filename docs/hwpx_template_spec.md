@@ -4,11 +4,15 @@
 HWPX 양식을 만들 때 따라야 하는 사양을 정의한다.
 
 > 양식이 완성되면 **`assets/hwpx_template.hwpx`** 경로에 그대로 두면 자동 적용된다.
-> (또는 `.env` 의 `HWPX_TEMPLATE_PATH` 변수로 다른 경로 지정 가능 — 향후 코드 지원 예정)
+> (양식 매핑 코드는 차후 패치 예정 — 현재는 plain 본문 출력만 동작)
 
-> 🚧 **현재 상태**: 본 문서는 사업자측에 양식 제작을 미리 요청하기 위한 스펙입니다.
-> 보고서 산출물의 HWPX 출력 코드는 RAG 인덱싱 안정화 이후 별도 패치로 추가됩니다.
-> 양식이 먼저 준비되어 있으면 코드 구현 시 바로 연결됩니다.
+> ✅ **현재 상태 (2026-05-20)**:
+> - 보고서 HWPX 출력 코드 **구현 완료** — 한컴 한글 + Windows + `pywin32` 환경에서
+>   Studio 의 「📄 HWPX 보고서」 버튼이 plain 본문을 `.hwpx` 로 다운로드 가능.
+> - 본 문서의 §1~§8 양식 스펙은 **디자인팀 답변 대기 중**. 양식이 준비되어
+>   `assets/hwpx_template.hwpx` 에 들어오면, 양식 위에 본문을 주입하는 매핑
+>   코드를 추가 패치할 예정 (한컴 OLE `InsertText` 후 `FileSaveAs_S` 흐름은
+>   이미 [core/hwpx_export.py](../core/hwpx_export.py) 에 들어가 있음).
 
 ---
 
@@ -121,33 +125,45 @@ HWPX 양식을 만들 때 따라야 하는 사양을 정의한다.
 
 ---
 
-## 9. 적용 방법 (향후 코드 지원 후)
+## 9. 적용 방법
 
-양식 파일을 받으면:
-1. `d:\00work\260519-localnotebooklm\assets\hwpx_template.hwpx` 위치에 저장
-2. (향후 패치 이후) Local NotebookLM 앱 재시작
-3. Studio → 📄 보고서 클릭 → 양식 적용된 `.hwpx` 다운로드
+### 현재 (양식 매핑 패치 전 — plain 본문 다운로드)
+1. Windows + 한컴 한글 + venv 에 `pywin32` 설치 (`pip install pywin32`)
+2. Local NotebookLM 실행 (`run.bat`)
+3. Studio → 「📄 HWPX 보고서」 클릭 → 우측 메모 expander 안 `⬇ ...hwpx` 다운로드
+4. 한글에서 열어 본문 확인 — 스타일 미적용 plain 본문
 
-양식 파일이 없으면 일반 Markdown 만 표시(현재 동작) 또는 LibreOffice 기본 변환(향후 구현)
-이 사용됩니다.
+### 양식 매핑 패치 후 (디자인팀 양식 수령 시)
+1. 양식 파일을 `assets/hwpx_template.hwpx` 에 저장
+2. 앱 재시작 → 같은 버튼을 누르면 양식 위에 본문이 주입된 `.hwpx` 다운로드
+
+미설치 환경 (한컴 한글 또는 pywin32 미설치) 에서는 같은 버튼이 본문 Markdown 만
+표시하고 다운로드 버튼은 뜨지 않습니다. 콘솔의 `[hwpx_export]` 진단 라인에
+원인이 찍힙니다.
 
 ---
 
 ## 10. 변환 파이프라인 (참고 — 개발자 측)
 
-코드 구현 시 다음 두 가지 경로 중 선택 검토:
+채택된 방식: **한컴 OLE 자동화 (HwpAutomation)** — 한국 사무 환경 표준 가정.
 
-**A. LibreOffice CLI 변환** (현재 HWPX → PDF 입력 처리와 같은 방식)
-- Markdown → ODT(LibreOffice) → HWPX 양식에 콘텐츠 주입 → 저장
-- 장점: 의존성 적음, 이미 설치 권장 안내가 README 에 있음
-- 단점: HWPX 스타일 매핑 정확도 검증 필요
+| 단계 | 호출 | 비고 |
+|---|---|---|
+| COM init | `pythoncom.CoInitialize()` | Streamlit 워커 thread 에서 COM 사용 위해 필수 |
+| Dispatch | `win32com.client.Dispatch("HWPFrame.HwpObject")` | 한컴 한글 11.0 (한글 2020) 확인 |
+| 보안 우회 | `hwp.RegisterModule("FilePathCheckDLL", "AutomationModule")` | 자동화 시 경로 확인 다이얼로그 회피 |
+| 새 문서 | `hwp.HAction.Run("FileNew")` | |
+| 본문 삽입 | `hwp.HAction.Execute("InsertText", pset.HSet)` | `pset.Text` 에 markdown 본문 |
+| 저장 | `hwp.HAction.Execute("FileSaveAs_S", save_set.HSet)` | `save_set.Format = "HWPX"` |
 
-**B. 한글 자동화 (HwpAutomation / 한컴 OLE)**
-- 한컴 한글 설치된 환경 필수 (Windows 한정)
-- 장점: 양식 100% 정확 재현
-- 단점: 사용자 PC에 한글 설치 필수, 매크로 보안 문제 가능
+> `hwp.SaveAs(path, "HWPX")` 직접 호출은 `DISP_E_BADPARAMCOUNT (-2147352562)` 가
+> 발생하기 쉬워 표준 액션 방식(`FileSaveAs_S`)을 사용한다.
 
-→ 초기 PoC 는 A 로 진행, 회사 환경에 한글이 표준 설치되어 있으면 B 추가 검토.
+대안 검토 이력:
+- **LibreOffice CLI** — LibreOffice 가 `.hwpx` 출력을 직접 지원하지 않아 PoC 보류.
+  필요 시 `Markdown → ODT → 사용자가 한글에서 열어 .hwpx 저장` 의 수동 단계 우회 가능.
+- **HWPX ZIP 직접 생성** — `application/hwp+zip` 컨테이너에 `Contents/section0.xml`
+  본문을 직접 작성하는 방식. 의존성 0 이지만 양식 매핑 시 한컴 호환 검증 부담 큼.
 
 ---
 

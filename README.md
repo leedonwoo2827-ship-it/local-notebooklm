@@ -4,6 +4,8 @@ NotebookLM 스타일 3-패널 로컬 웹 앱.
 PDF / Docx / TXT / HWPX / SRT / VTT / MP4 를 소스로 받아, **Citation Q&A** 와 **Studio 산출물**(보고서·슬라이드·마인드맵·플래시카드·퀴즈 …) 을 생성합니다.
 
 > ⚠️ 입력 소스는 텍스트가 이미 추출되는 포맷만 지원합니다 — PDF(텍스트 추출 가능한 것) / Docx / Md / Txt / SRT · VTT / MP4(STT). 스캔/이미지 PDF 는 외부 OCR 로 텍스트를 추출해 `.txt` 로 넣어주세요. (필요 시 `.env` 의 `ENABLE_MINERU=true` 로 MinerU OCR 분기를 켤 수 있지만 기본은 OFF — CPU PC 부담과 멀티모달 quirk 회피용 결정)
+>
+> 📄 **HWPX 보고서 다운로드** 는 한컴 한글이 설치된 Windows 환경에서 활성화됩니다 (한컴 OLE 자동화). 미설치 환경에서는 같은 산출물이 Markdown 으로만 표시됩니다.
 
 - 본체: [HKUDS/RAG-Anything](https://github.com/HKUDS/RAG-Anything) (LightRAG)
 - LLM: 사내/외부 LiteLLM 프록시 → DeepSeek / Claude / GPT 라우팅
@@ -29,9 +31,10 @@ PDF / Docx / TXT / HWPX / SRT / VTT / MP4 를 소스로 받아, **Citation Q&A**
 |---|---|
 | Python venv + 의존성 (`raganything[all]`, `torch` 등) | ~6–8 GB |
 | BGE-M3 임베딩 모델 (BAAI/bge-m3, 최초 사용 시 자동 다운로드) | ~2.3 GB |
-| MinerU 파서 모델 (PDF 레이아웃·OCR, 최초 사용 시 자동 다운로드) | ~3–4 GB |
+| MinerU 파서 모델 (`ENABLE_MINERU=true` 일 때만 다운로드, 기본 OFF) | ~3–4 GB |
 | faster-whisper 모델 (CPU = small ~500 MB, GPU = large-v3 ~3 GB) | 0.5–3 GB |
-| LibreOffice (HWPX 변환 시만 필요, 선택) | ~700 MB |
+| LibreOffice (HWPX 파일을 입력으로 올릴 때만 필요, 선택) | ~700 MB |
+| 한컴 한글 (보고서 HWPX 다운로드 시 필요, Windows) | 별도 설치 |
 | 노트북별 인덱스 (`data/notebooks/`) | 노트북 1개 = PDF 5권 기준 ~100–300 MB |
 
 ### 🖥️ GPU 없는 일반 사무용 PC라면
@@ -97,21 +100,21 @@ pip install torch --index-url https://download.pytorch.org/whl/cu121
 ## 🖥️ 화면 구성 (NotebookLM 3-패널)
 
 ```
-┌─────────────────┬───────────────────────┬─────────────────┐
-│  📚 출처        │  💬 채팅              │  🛠️ Studio       │
-│  + 소스 추가    │  (Citation Q&A)       │  📄 보고서      │
-│  ─ PDF          │                       │  🎴 슬라이드    │
-│  ─ Docx         │  사용자: 핵심은?      │  🧠 마인드맵    │
-│  ─ HWPX         │  AI: ...[Paper p.3]   │  🗂️ 플래시카드  │
-│  ─ SRT/VTT      │                       │  ❓ 퀴즈        │
-│  ─ MP4 (STT)    │  [질문 입력]          │                 │
-│  노트북 선택 ▾  │                       │  생성된 메모    │
-└─────────────────┴───────────────────────┴─────────────────┘
+┌─────────────────┬───────────────────────┬─────────────────────┐
+│  📚 출처        │  💬 채팅              │  🛠️ Studio          │
+│  + 소스 추가    │  (Citation Q&A)       │  📄 HWPX 보고서     │
+│  ─ PDF          │                       │  🎞 슬라이드(PPTX)  │
+│  ─ Docx         │  사용자: 핵심은?      │  🖼 카드뉴스        │
+│  ─ HWPX         │  AI: ...[Paper p.3]   │  🧠 마인드맵        │
+│  ─ SRT/VTT      │                       │  🗂️ 플래시카드      │
+│  ─ MP4 (STT)    │  [질문 입력]          │  ❓ 퀴즈            │
+│  노트북 선택 ▾  │                       │  생성된 메모 ⬇ 🗑   │
+└─────────────────┴───────────────────────┴─────────────────────┘
 ```
 
 - **출처(Sources)**: 파일 업로드 → 자동 인덱싱. 노트북별로 분리.
 - **채팅(Chat)**: 소스에서 인용한 답변. 출처 표시 포함.
-- **Studio**: 버튼 한 번에 보고서/슬라이드/마인드맵/플래시카드/퀴즈 생성.
+- **Studio**: 버튼 한 번에 산출물 생성. 디스크에 영구 저장되어 앱 재시작 후에도 우측에 그대로 표시. 다운로드 파일이 있는 항목은 헤더에 `⬇` 마커, 좌측 `🗑` 으로 두 번 클릭 삭제.
 
 ## 🧩 Studio 확장 (새 산출물 추가)
 
@@ -161,10 +164,11 @@ local-notebooklm/
 | `MODEL_STRONG` | `deepseek-v4-flash` | 보고서·심층 Q&A — 품질↑ 원하면 `claude-sonnet-4-6` |
 | `MODEL_CREATIVE` | `deepseek-v4-flash` | Studio 슬라이드/창작 — 품질↑ 원하면 `claude-sonnet-4-6` |
 | `EMBED_MODEL` | `BAAI/bge-m3` | 로컬 임베딩 (고정 권장) |
+| `ENABLE_MINERU` | `false` | 스캔/이미지 PDF OCR 분기. 기본 OFF — 텍스트 추출 가능한 PDF 만 사용 권장 |
 
 > 비용·모델별 추천 프로파일은 [docs/pricing.md](docs/pricing.md) 참고.
 > 회사 PPTX 양식 적용 가이드(디자인팀 전달용)는 [docs/pptx_template_spec.md](docs/pptx_template_spec.md) 참고.
-> 회사 HWPX 보고서 양식 가이드는 [docs/hwpx_template_spec.md](docs/hwpx_template_spec.md) 참고 (보고서 HWPX 출력은 향후 패치 예정).
+> 회사 HWPX 보고서 양식 가이드는 [docs/hwpx_template_spec.md](docs/hwpx_template_spec.md) 참고 (plain HWPX 다운로드는 이미 동작, 양식 매핑은 디자인팀 양식 수령 후 패치 예정).
 
 VPS 이전 시 `WHISPER_BACKEND=litellm` 만 바꾸면 GPU 없는 환경에서도 동일 코드 동작.
 
@@ -175,13 +179,15 @@ VPS 이전 시 `WHISPER_BACKEND=litellm` 만 바꾸면 GPU 없는 환경에서�
 | 증상 | 해결 |
 |---|---|
 | `python을 찾을 수 없습니다` | [Python 3.10+](https://www.python.org/downloads/) 설치 시 "Add Python to PATH" 체크 |
-| `LibreOffice를 찾을 수 없습니다` | HWPX 안 쓰면 무시. 쓰려면 [LibreOffice](https://www.libreoffice.org/download/) 설치 |
-| `WinError 1314` / `Mineru command failed` (Windows) | **Windows 개발자 모드 켜기** — `Windows 키` → "개발자용 설정" → "개발자 모드" 토글 ON. huggingface가 모델 캐시할 때 symlink 권한이 필요해서 발생. 활성화 후 `run.bat` 재실행 |
+| HWPX 보고서가 Markdown 만 보이고 다운로드 버튼이 없음 | 한컴 한글이 설치된 Windows 환경에서만 .hwpx 출력이 활성화됩니다. venv 에 `pywin32` 가 설치돼 있는지(`pip install pywin32`), 한컴 한글이 한 번이라도 실행돼 COM 등록되었는지 확인. 콘솔의 `[hwpx_export]` 진단 라인 참고 |
+| `LibreOffice를 찾을 수 없습니다` | **HWPX 파일을 입력으로 올릴 때만** 필요. 입력 안 쓰면 무시. 쓰려면 [LibreOffice](https://www.libreoffice.org/download/) 설치 |
+| `WinError 1314` / `Mineru command failed` (Windows) | `ENABLE_MINERU=true` 로 OCR 분기를 켰을 때만 발생. **Windows 개발자 모드 켜기** — `Windows 키` → "개발자용 설정" → "개발자 모드" 토글 ON. huggingface가 모델 캐시할 때 symlink 권한이 필요해서 발생. 활성화 후 `run.bat` 재실행. OCR 안 쓰면 그냥 기본값(OFF) 유지 |
 | `401 Unauthorized` | ⚙️ 설정에서 키/URL 다시 확인. 저장 후 새로고침 |
-| 첫 PDF 인덱싱이 5–10분 | MinerU OCR/레이아웃 분석 정상 동작. 두 번째부터는 캐시 사용 |
+| 첫 PDF 인덱싱이 5–10분 | `ENABLE_MINERU=true` 일 때만 — OCR/레이아웃 분석으로 길어짐. 기본값(pypdf 텍스트 추출)은 페이지당 1–2초 |
 | 디스크 부족 | 모델 자동 다운로드로 ~15 GB 사용. 외장 SSD에 폴더 두고 작업해도 OK |
 | CPU에서 STT 느림 | `.env`의 `WHISPER_BACKEND=litellm` 로 변경 → 프록시로 위임 |
 | 임베딩이 느림 (CPU) | `pip install torch --index-url https://download.pytorch.org/whl/cu121` 로 CUDA 빌드 (GPU 있을 때만) |
+| 채팅이 "no-context" / 빈 답변 (구버전) | RAG 인덱싱이 빈 채로 끝났던 버그(2026-05-20 이전). 노트북의 `data/notebooks/<이름>/rag_storage/` 비우고 소스 재업로드 → 다음 인덱싱부터 정상 |
 
 ---
 

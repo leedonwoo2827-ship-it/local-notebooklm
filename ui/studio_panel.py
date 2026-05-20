@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+import io
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -80,32 +82,51 @@ def render() -> None:
 
     for i, result in enumerate(reversed(results)):
         slot_id = f"{notebook_name}_{result['key']}_{result['time']}_{i}"
-        # 다운로드 파일이 동반된 산출물은 헤더 시간 옆에 ⬇ 마커 표시.
+        # 다운로드 파일 동반된 산출물은 헤더 시간 옆에 ⬇ 마커로 식별만.
+        # 실제 다운로드는 expander 안의 download_button 에서 (expander 토글과
+        # 시각 충돌을 피하기 위해 헤더 옆 인라인 버튼은 사용하지 않음).
         has_files = any(Path(f).exists() for f in (result.get("files") or []))
         dl_marker = "  ⬇" if has_files else ""
 
-        # 좌측 narrow column 에 인라인 삭제 토글, 우측에 본 expander.
         col_del, col_main = st.columns([1, 30])
         with col_del:
             _render_delete_button_inline(result, results, slot_id)
         with col_main:
+            # expanded=False: 새 산출물도 닫힌 채로 표시 — 모든 항목이 일관되게
+            # `>` 토글로만 열리도록.
             with st.expander(
                 f"{result['icon']} {result['title']} · {result['time']}{dl_marker}",
-                expanded=(i == 0),
+                expanded=False,
             ):
                 # unsafe_allow_html=True: 퀴즈의 <details><summary> 같은 접힘 블록을
                 # raw 태그가 아니라 실제 expander 로 렌더링하기 위해 필요.
                 st.markdown(result["markdown"], unsafe_allow_html=True)
-                if result.get("files"):
-                    for f in result["files"]:
-                        if not Path(f).exists():
-                            continue
-                        st.download_button(
-                            f"⬇ {f.name}",
-                            data=Path(f).read_bytes(),
-                            file_name=f.name,
-                            key=f"dl_{slot_id}_{f.name}",
-                        )
+                existing = [Path(f) for f in (result.get("files") or []) if Path(f).exists()]
+                # 다중 파일(예: 카드뉴스 회차별 PNG+HTML+종합) 일 때 묶음 다운로드.
+                if len(existing) >= 2:
+                    zip_name = f"{result['key']}_{result['time'].replace(':', '').replace(' ', '_')}.zip"
+                    st.download_button(
+                        f"📦 전체 다운로드 ({len(existing)}개 파일 · ZIP)",
+                        data=_zip_files(existing),
+                        file_name=zip_name,
+                        key=f"zip_{slot_id}",
+                    )
+                for f in existing:
+                    st.download_button(
+                        f"⬇ {f.name}",
+                        data=f.read_bytes(),
+                        file_name=f.name,
+                        key=f"dl_{slot_id}_{f.name}",
+                    )
+
+
+def _zip_files(files: list[Path]) -> bytes:
+    """동반 파일들을 메모리에서 zip 으로 묶는다 — 파일명만 보존, 디렉토리 구조 제거."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in files:
+            zf.write(f, arcname=f.name)
+    return buf.getvalue()
 
 
 def _render_delete_button_inline(result: dict, results: list, slot_id: str) -> None:
