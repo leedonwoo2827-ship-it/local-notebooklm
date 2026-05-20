@@ -44,8 +44,18 @@ def render() -> None:
         accept_multiple_files=True,
         key=f"uploader_{chosen}",
     )
+    # Streamlit 은 위젯 값이 재실행 사이에도 살아있어서, 같은 file_uploader 결과로
+    # _ingest_uploads 가 매 rerun 마다 호출된다. 같은 파일을 두 번 enqueue 하면
+    # LightRAG 가 첫 번째 처리(HANDLING)와 두 번째 호출을 충돌시켜 duplicate 로
+    # 분류 → chunks_count=0 인 빈 doc 만 남음. session_state 로 1회 처리 가드.
     if uploaded:
-        _ingest_uploads(uploaded, paths)
+        processed_key = f"ingested_{chosen}"
+        already = st.session_state.setdefault(processed_key, set())
+        fresh = [f for f in uploaded if (f.name, getattr(f, "size", None)) not in already]
+        if fresh:
+            _ingest_uploads(fresh, paths)
+            for f in fresh:
+                already.add((f.name, getattr(f, "size", None)))
 
     st.divider()
     st.caption("등록된 소스")

@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 
 import streamlit as st
-from lightrag.base import QueryParam
 
 from core.rag import build_rag, list_sources
 from studio._base import load_prompt
@@ -50,5 +49,7 @@ async def _query(notebook_name: str, prompt: str) -> str:
     full_prompt = f"{system}\n\n[질문]\n{prompt}" if system else prompt
     return await rag.aquery(
         full_prompt,
-        param=QueryParam(mode="hybrid", top_k=20, response_type="Markdown with citations"),
+        mode="hybrid",
+        top_k=20,
+        response_type="Markdown with citations",
     )

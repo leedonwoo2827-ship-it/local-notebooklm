@@ -116,6 +116,32 @@
 | **합계 (STT 로컬)** | **$0.01** | **$0.07** | **$0.18** |
 | **합계 (STT 프록시)** | **$0.37** | **$0.43** | **$0.54** |
 
+### 시나리오 D — 자막 3개(은행 FP) 실측 예시
+
+**작업**: VTT 3개(각 ~25,000자, 강의 1시간씩) 인덱싱 → 채팅/보고서/카드뉴스 등 산출물
+
+**토큰 추정**:
+
+| 단계 | 입력 토큰 | 출력 토큰 |
+|---|---:|---:|
+| Entity 추출 (자막 3개 × 25K자) | 75,000 | 15,000 |
+| 채팅/보고서 호출 1회 | 10,000 | 2,000 |
+| 카드뉴스 4장 (회차 3 + 종합 1) | 25,000 | 4,000 |
+
+**모드별 합계**:
+
+| 단계 | EXTRACT=gpt-5.4-mini, CREATIVE=Sonnet | 전부 Sonnet |
+|---|---:|---:|
+| Entity 추출 (인덱싱, 최초 1회) | $0.049 | $0.450 |
+| 채팅 1회 (Sonnet) | $0.060 | $0.060 |
+| 카드뉴스 4장 (Sonnet) | $0.135 | $0.135 |
+| **합계 (첫 회)** | **$0.24** | **$0.65** |
+| **반복 산출물 (인덱싱 캐시 적중)** | **$0.20** | **$0.20** |
+
+> 인덱싱은 노트북당 1회. `data/notebooks/<name>/rag_storage/` 에 그래프/벡터가 저장되어
+> 다음번 앱 재시작 시 자동 로드. 같은 자막을 다시 올려도 LightRAG가 hash로 중복 감지하여
+> entity 추출을 건너뜀 → 사실상 무료.
+
 ### 시나리오 C — 해외사업 AIM 자료 1편 풀세트
 
 **작업**: PDF 10권(400쪽) 인덱싱 + 채팅 50회 + Studio 산출물 7개(보고서 2 + 영문요약 + 슬라이드 + 마인드맵 + 플래시카드 + 퀴즈)
@@ -136,6 +162,34 @@
 | 채팅 50회 | $0.22 | $0.22 | $3.30 |
 | Studio 7개 | $0.11 | $1.65 | $1.65 |
 | **합계** | **$0.73** | **$2.27** | **$10.95** |
+
+## ⚠️ 알려진 모델 제약 (중요)
+
+### DeepSeek는 `MODEL_EXTRACT` 에 쓸 수 없다
+
+LightRAG는 entity 추출 단계에서 OpenAI 호환 API의
+`response_format = {"type": "json_schema", ...}` 기능을 사용한다.
+**DeepSeek-v4 계열은 이 기능을 지원하지 않아 400 에러를 반환**한다:
+
+```
+litellm.BadRequestError: DeepseekException -
+  "This response_format type is unavailable now"
+```
+
+→ `MODEL_EXTRACT` 만큼은 **`gpt-5.4-mini`(권장) / `claude-haiku-4-5` / `gemini-3-flash-preview`** 중
+하나로 두어야 한다. `MODEL_CHAT` · `MODEL_CREATIVE` · `MODEL_STRONG` 은 DeepSeek 그대로 사용 가능
+(우리 코드가 JSON 모드 안 씀).
+
+### 결론: 권장 `.env` 조합
+
+```
+MODEL_CHAT=deepseek-v4-flash      # 채팅 — DeepSeek 저렴 OK
+MODEL_EXTRACT=gpt-5.4-mini        # ⭐ 인덱싱 — JSON schema 필요
+MODEL_STRONG=claude-sonnet-4-6    # 보고서/심층 Q&A
+MODEL_CREATIVE=claude-sonnet-4-6  # Studio 산출물(슬라이드/카드뉴스)
+```
+
+---
 
 ## 🎛 프로파일별 추천 (필요 시 `.env`에서 변경)
 

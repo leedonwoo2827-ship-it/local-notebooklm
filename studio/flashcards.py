@@ -6,8 +6,6 @@ import re
 import time
 from pathlib import Path
 
-from lightrag.base import QueryParam
-
 from ._base import ArtifactMeta, ArtifactResult, load_prompt
 
 META = ArtifactMeta(
@@ -70,7 +68,8 @@ async def generate(rag, context: dict) -> ArtifactResult:
     )
     raw = await rag.aquery(
         instruction.replace("{{N}}", str(count)),
-        param=QueryParam(mode="hybrid", top_k=30),
+        mode="hybrid",
+        top_k=30,
     )
     try:
         bundle = json.loads(_strip_fence(raw))

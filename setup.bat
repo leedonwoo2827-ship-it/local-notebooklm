@@ -24,17 +24,24 @@ goto :install_deps
 echo [2/4] Virtual environment already exists. Skipping.
 
 :install_deps
-echo [3/4] Installing dependencies. This may take 10-15 minutes ...
+echo [3/5] Installing dependencies. This may take 10-15 minutes ...
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip >nul
 pip install -e .
 if errorlevel 1 goto :install_fail
 
+echo [4/5] Installing Playwright Chromium (for cardnews PNG capture) ...
+python -m playwright install chromium
+if errorlevel 1 (
+    echo [WARN] Playwright Chromium install failed. Cardnews PNG capture will be disabled.
+    echo        You can retry later:  .venv\Scripts\python.exe -m playwright install chromium
+)
+
 if exist ".env" (
-    echo [4/4] .env already exists.
+    echo [5/5] .env already exists.
 ) else (
     copy .env.example .env >nul
-    echo [4/4] Created .env from .env.example.
+    echo [5/5] Created .env from .env.example.
 )
 
 echo.

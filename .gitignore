@@ -36,4 +36,12 @@ desktop.ini
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
+
+# Playwright 다운로드 캐시 (사용자 PC별로 다름)
+.playwright/
+
+# 카드뉴스/슬라이드 산출물 (노트북별 artifacts 폴더에 저장)
+data/notebooks/*/artifacts/cardnews/
+data/notebooks/*/artifacts/slides/

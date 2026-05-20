@@ -1,8 +1,6 @@
 """보고서 산출물 — 노트북 전체 소스에서 ~3,000자 종합 Markdown."""
 from __future__ import annotations
 
-from lightrag.base import QueryParam
-
 from core.llm_client import get_llm_func
 
 from ._base import ArtifactMeta, ArtifactResult, load_prompt
@@ -24,7 +22,9 @@ async def generate(rag, context: dict) -> ArtifactResult:
 
     answer = await rag.aquery(
         instruction,
-        param=QueryParam(mode="hybrid", top_k=40, response_type="Multi-section Markdown"),
+        mode="hybrid",
+        top_k=40,
+        response_type="Multi-section Markdown",
     )
 
     return ArtifactResult(

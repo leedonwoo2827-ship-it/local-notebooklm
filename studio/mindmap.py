@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import re
 
-from lightrag.base import QueryParam
-
 from ._base import ArtifactMeta, ArtifactResult, load_prompt
 
 META = ArtifactMeta(
@@ -34,7 +32,8 @@ async def generate(rag, context: dict) -> ArtifactResult:
     )
     answer = await rag.aquery(
         instruction,
-        param=QueryParam(mode="hybrid", top_k=30),
+        mode="hybrid",
+        top_k=30,
     )
     return ArtifactResult(
         key=META.key,

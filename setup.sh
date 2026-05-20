@@ -26,17 +26,23 @@ else
     python3 -m venv .venv
 fi
 
-echo "[3/4] Installing dependencies (may take 10-15 minutes) ..."
+echo "[3/5] Installing dependencies (may take 10-15 minutes) ..."
 # shellcheck disable=SC1091
 source .venv/bin/activate
 python -m pip install --upgrade pip >/dev/null
 pip install -e .
 
+echo "[4/5] Installing Playwright Chromium (for cardnews PNG capture) ..."
+if ! python -m playwright install chromium; then
+    echo "[WARN] Playwright Chromium install failed. Cardnews PNG capture will be disabled."
+    echo "       Retry later:  .venv/bin/python -m playwright install chromium"
+fi
+
 if [ -f ".env" ]; then
-    echo "[4/4] .env already exists."
+    echo "[5/5] .env already exists."
 else
     cp .env.example .env
-    echo "[4/4] Created .env from .env.example."
+    echo "[5/5] Created .env from .env.example."
 fi
 
 echo

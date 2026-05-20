@@ -62,13 +62,18 @@ def render() -> None:
                     )
 
 
-def _run_artifact(art: RegisteredArtifact, notebook_name: str, results: list) -> None:
+def _run_artifact(art: RegisteredArtifact, notebook_name: str, results: list) -> bool:
+    """Return True on success. 실패 시 콘솔/UI 양쪽에 에러를 남긴다."""
+    import traceback
+
     paths = NotebookPaths.for_notebook(notebook_name)
     context = {
         "notebook_name": notebook_name,
         "artifacts_dir": paths.artifacts,
         "deck_name": notebook_name,
     }
+
+    print(f"\n[Studio] {art.meta.title} 시작 (notebook={notebook_name})", flush=True)
 
     with st.spinner(f"{art.meta.title} 생성 중..."):
         async def _go():
@@ -78,9 +83,15 @@ def _run_artifact(art: RegisteredArtifact, notebook_name: str, results: list) ->
         try:
             result = asyncio.run(_go())
         except Exception as e:
-            st.error(f"{art.meta.title} 생성 실패: {e}")
-            return
+            tb = traceback.format_exc()
+            print(f"[Studio] {art.meta.title} 실패:\n{tb}", flush=True)
+            # st.rerun() 으로 사라지지 않도록 session_state 에 보관
+            st.session_state["studio_last_error"] = (
+                f"**{art.meta.title} 생성 실패**\n\n```\n{type(e).__name__}: {e}\n```"
+            )
+            return False
 
+    print(f"[Studio] {art.meta.title} 완료 (files={len(result.files)})", flush=True)
     results.append({
         "key": result.key,
         "title": result.title,
@@ -94,3 +105,4 @@ def _run_artifact(art: RegisteredArtifact, notebook_name: str, results: list) ->
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     (out_dir / f"{stamp}.md").write_text(result.markdown, encoding="utf-8")
+    return True

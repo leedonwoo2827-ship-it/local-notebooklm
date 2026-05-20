@@ -70,12 +70,18 @@ async def build_rag(notebook_name: str) -> RAGAnything:
             enable_equation_processing=True,
         )
 
+        # vision_model_func 는 의도적으로 넘기지 않는다.
+        # 넘기면 RAGAnything.aquery 가 자동으로 VLM 분기로 빠지면서
+        # 자막/텍스트만 있는 쿼리에서 _process_image_paths_for_vlm 이 None을 받아 터진다.
+        # PDF 멀티모달 캡셔닝이 필요해지면 그때 옵션으로 추가.
         rag = RAGAnything(
             config=config,
             llm_model_func=get_llm_func("extract"),
-            vision_model_func=get_llm_func("strong"),
             embedding_func=get_embedding_func(),
         )
+        # RAGAnything.aquery 는 lazy-init 을 부르지 않으므로 명시적으로 강제한다.
+        # 같은 working_dir 의 기존 그래프/벡터를 자동 로딩한다.
+        await rag._ensure_lightrag_initialized()
         _instances[key] = rag
         return rag
 
