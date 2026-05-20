@@ -55,13 +55,42 @@ def render() -> None:
         st.write("_(아직 산출물 없음)_")
         return
 
+    # 헤더 옆 인라인 삭제 버튼의 테두리를 줄여 expander 헤더와 자연스럽게 맞물리게.
+    st.markdown(
+        """
+        <style>
+        /* Studio 우측 패널: '생성된 메모' 영역의 narrow 좌측 column 안 버튼은
+           expander 헤더 옆에 인라인으로 붙는 삭제 토글이므로 borderless 처리. */
+        div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child
+            div[data-testid="stButton"] button {
+            border: 1px solid transparent !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            padding: 0.25rem 0.4rem !important;
+            min-height: 0 !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div[data-testid="column"]:first-child
+            div[data-testid="stButton"] button:hover {
+            background: rgba(0,0,0,0.04) !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     for i, result in enumerate(reversed(results)):
         slot_id = f"{notebook_name}_{result['key']}_{result['time']}_{i}"
-        # expander 헤더와 같은 줄에 작은 삭제 아이콘을 배치하기 위해 column 분할.
-        col_main, col_del = st.columns([20, 1])
+        # 다운로드 파일이 동반된 산출물은 헤더 시간 옆에 ⬇ 마커 표시.
+        has_files = any(Path(f).exists() for f in (result.get("files") or []))
+        dl_marker = "  ⬇" if has_files else ""
+
+        # 좌측 narrow column 에 인라인 삭제 토글, 우측에 본 expander.
+        col_del, col_main = st.columns([1, 30])
+        with col_del:
+            _render_delete_button_inline(result, results, slot_id)
         with col_main:
             with st.expander(
-                f"{result['icon']} {result['title']} · {result['time']}",
+                f"{result['icon']} {result['title']} · {result['time']}{dl_marker}",
                 expanded=(i == 0),
             ):
                 # unsafe_allow_html=True: 퀴즈의 <details><summary> 같은 접힘 블록을
@@ -77,8 +106,6 @@ def render() -> None:
                             file_name=f.name,
                             key=f"dl_{slot_id}_{f.name}",
                         )
-        with col_del:
-            _render_delete_button_inline(result, results, slot_id)
 
 
 def _render_delete_button_inline(result: dict, results: list, slot_id: str) -> None:
