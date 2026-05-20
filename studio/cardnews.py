@@ -301,12 +301,25 @@ async def capture_png(html: str, png_path: Path, width: int = CARD_WIDTH, height
         await page.goto(html_path.as_uri())
         await page.wait_for_load_state("networkidle")
 
-        # .card 박스 측정 — 콘텐츠 끝까지 정확히 클립.
+        # 폰트 로드 완료까지 대기 — 폰트 전 layout 시점에 측정하면 .card 가
+        # 작게 잡혀 콘텐츠가 잘린다.
+        await page.evaluate(
+            "document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()"
+        )
+        await page.wait_for_timeout(300)
+
+        # .card 박스 측정 — height 는 scrollHeight 로 안전망(BoundingRect 가
+        # 일부 자식 element 의 margin 으로 인해 underestimate 할 수 있음).
         box = await page.evaluate(
             """() => {
                 const el = document.querySelector('.card') || document.body;
                 const r = el.getBoundingClientRect();
-                return {x: r.left, y: r.top, width: r.width, height: r.height};
+                return {
+                    x: r.left,
+                    y: r.top,
+                    width: r.width,
+                    height: Math.max(r.height, el.scrollHeight),
+                };
             }"""
         )
         await page.screenshot(path=str(png_path), clip=box)
