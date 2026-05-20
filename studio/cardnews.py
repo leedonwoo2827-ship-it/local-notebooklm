@@ -278,7 +278,13 @@ def render_card_html(card: dict, width: int = CARD_WIDTH, height: int = CARD_HEI
 
 
 async def capture_png(html: str, png_path: Path, width: int = CARD_WIDTH, height: int = CARD_HEIGHT) -> Path:
-    """HTML 문자열 → PNG 캡처. Playwright 사용. 동기 호출이 필요할 경우 asyncio.run."""
+    """HTML 문자열 → PNG 캡처. `.card` 박스를 측정해 콘텐츠 높이에 정확히 맞춘다.
+
+    `viewport.height` 를 그대로 캡처할 경우 콘텐츠보다 viewport 가 크면
+    하단에 빈 영역이 그대로 PNG 에 들어간다. 그래서 두 단계로 처리:
+      1) viewport.height 를 작게(=콘텐츠가 자연스럽게 늘어나도록) 두고
+      2) `.card` 박스의 bounding rect 을 측정해 그 영역만 clip 캡처.
+    """
     from playwright.async_api import async_playwright
 
     png_path.parent.mkdir(parents=True, exist_ok=True)
@@ -287,13 +293,23 @@ async def capture_png(html: str, png_path: Path, width: int = CARD_WIDTH, height
 
     async with async_playwright() as p:
         browser = await p.chromium.launch()
-        ctx = await browser.new_context(viewport={"width": width, "height": height},
-                                        device_scale_factor=2)
+        ctx = await browser.new_context(
+            viewport={"width": width, "height": 600},  # 콘텐츠가 자연 확장하도록 작은 초기값
+            device_scale_factor=2,
+        )
         page = await ctx.new_page()
         await page.goto(html_path.as_uri())
-        # 폰트 로드 대기
         await page.wait_for_load_state("networkidle")
-        await page.screenshot(path=str(png_path), full_page=True)
+
+        # .card 박스 측정 — 콘텐츠 끝까지 정확히 클립.
+        box = await page.evaluate(
+            """() => {
+                const el = document.querySelector('.card') || document.body;
+                const r = el.getBoundingClientRect();
+                return {x: r.left, y: r.top, width: r.width, height: r.height};
+            }"""
+        )
+        await page.screenshot(path=str(png_path), clip=box)
         await browser.close()
 
     return png_path
