@@ -19,12 +19,12 @@ from ._base import ArtifactMeta, ArtifactResult, load_prompt
 
 META = ArtifactMeta(
     key="slides",
-    title="슬라이드 자료(PPTX)",
-    icon="🎴",
+    title="PPTX 보고서",
+    icon="📊",
     order=20,
     model_profile="creative",
     accepts=("subtitle", "text"),
-    description="자막/텍스트 → 한국어 발표용 PPTX. 고정 디자인 테마 적용.",
+    description="자막/텍스트 → 한국어 발표용 PPTX (6장 디폴트). 회사 양식 자동 적용.",
 )
 
 
@@ -83,8 +83,12 @@ async def make_slides_lite(
     metadata: dict | None = None,
     llm_call: LLMFunc | None = None,
     slides: int = 6,
+    prompt_key: str = "slides",
 ) -> dict:
-    """Pure async function — reused by lecture-postpro-mcp.
+    """Pure async function — reused by lecture-postpro-mcp + slide_outline.
+
+    prompt_key: prompts/<key>_ko.md 를 읽는다. PPTX 보고서는 "slides",
+    슬라이드 교안(텍스트) 는 "slide_outline" 로 분리.
 
     Returns: {"title", "subtitle", "slides":[{title, bullets, speaker_notes, keywords}], "markdown": "..."}
     """
@@ -94,7 +98,7 @@ async def make_slides_lite(
         else subtitle_text
     )
 
-    prompt_tpl = load_prompt("slides") or (
+    prompt_tpl = load_prompt(prompt_key) or (
         "다음 강의 자막을 바탕으로 {{N}}개의 슬라이드로 정리하라."
     )
     prompt = (

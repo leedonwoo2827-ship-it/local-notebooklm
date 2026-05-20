@@ -1,4 +1,4 @@
-"""플래시카드 산출물 — Q/A JSON + Anki .apkg 옵션."""
+"""플래시카드 산출물 — Q/A JSON + Anki .apkg + .xlsx."""
 from __future__ import annotations
 
 import json
@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from ._base import ArtifactMeta, ArtifactResult, load_prompt
+from ._xlsx import write_table_xlsx
 
 META = ArtifactMeta(
     key="flashcards",
@@ -80,9 +81,22 @@ async def generate(rag, context: dict) -> ArtifactResult:
     files: list[Path] = []
     artifacts_dir = context.get("artifacts_dir")
     if artifacts_dir and cards:
-        apkg = _try_export_anki(cards, Path(artifacts_dir), context.get("deck_name", "노트북"))
+        out_dir = Path(artifacts_dir) / META.key
+        # .apkg (Anki 패키지)
+        apkg = _try_export_anki(cards, out_dir, context.get("deck_name", "노트북"))
         if apkg:
             files.append(apkg)
+        # .xlsx (Excel 시트) — Anki 가져오기 호환 위해 컬럼 순서 Q → A
+        try:
+            xlsx_path = write_table_xlsx(
+                out_dir / f"flashcards_{int(time.time())}.xlsx",
+                headers=["#", "Q", "A"],
+                rows=[[i, c.get("q", ""), c.get("a", "")] for i, c in enumerate(cards, 1)],
+                sheet_name="플래시카드",
+            )
+            files.append(xlsx_path)
+        except Exception as e:
+            print(f"[flashcards] xlsx 생성 실패: {e}", flush=True)
 
     return ArtifactResult(
         key=META.key,
