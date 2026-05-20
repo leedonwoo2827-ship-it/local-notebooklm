@@ -57,45 +57,53 @@ def render() -> None:
 
     for i, result in enumerate(reversed(results)):
         slot_id = f"{notebook_name}_{result['key']}_{result['time']}_{i}"
-        with st.expander(f"{result['icon']} {result['title']} · {result['time']}", expanded=(i == 0)):
-            # unsafe_allow_html=True: 퀴즈의 <details><summary>정답·해설</summary> 같은
-            # 접힘 블록을 raw 태그가 아닌 실제 expander 로 렌더링하기 위해 필요.
-            st.markdown(result["markdown"], unsafe_allow_html=True)
-            if result.get("files"):
-                for f in result["files"]:
-                    if not Path(f).exists():
-                        continue
-                    st.download_button(
-                        f"⬇ {f.name}",
-                        data=Path(f).read_bytes(),
-                        file_name=f.name,
-                        key=f"dl_{slot_id}_{f.name}",
-                    )
+        # expander 헤더와 같은 줄에 작은 삭제 아이콘을 배치하기 위해 column 분할.
+        col_main, col_del = st.columns([20, 1])
+        with col_main:
+            with st.expander(
+                f"{result['icon']} {result['title']} · {result['time']}",
+                expanded=(i == 0),
+            ):
+                # unsafe_allow_html=True: 퀴즈의 <details><summary> 같은 접힘 블록을
+                # raw 태그가 아니라 실제 expander 로 렌더링하기 위해 필요.
+                st.markdown(result["markdown"], unsafe_allow_html=True)
+                if result.get("files"):
+                    for f in result["files"]:
+                        if not Path(f).exists():
+                            continue
+                        st.download_button(
+                            f"⬇ {f.name}",
+                            data=Path(f).read_bytes(),
+                            file_name=f.name,
+                            key=f"dl_{slot_id}_{f.name}",
+                        )
+        with col_del:
+            _render_delete_button_inline(result, results, slot_id)
 
-            # 삭제 — 한 번 누르면 확인 영역, 다시 누르면 실제 삭제.
-            _render_delete_controls(result, results, slot_id)
 
+def _render_delete_button_inline(result: dict, results: list, slot_id: str) -> None:
+    """Expander 헤더 옆에 두는 인라인 삭제 버튼 — 두 단계 확인.
 
-def _render_delete_controls(result: dict, results: list, slot_id: str) -> None:
-    """두 단계 삭제 UI: [🗑 삭제] → [⚠️ 정말 삭제 / 취소]."""
+    평소엔 🗑, 한 번 누르면 같은 자리가 ⚠️ 로 바뀌고, 다시 누르면 실제 삭제.
+    다른 항목의 🗑 을 누르면 자동으로 직전 confirm 은 해제 — 동시에 두 항목이
+    confirm 상태가 되지 않도록.
+    """
     confirm_key = f"del_confirm_{slot_id}"
-
-    if not st.session_state.get(confirm_key):
-        if st.button("🗑 삭제", key=f"del_{slot_id}", help="이 산출물을 디스크에서 영구 삭제"):
-            st.session_state[confirm_key] = True
-            st.rerun()
-        return
-
-    st.warning("이 산출물의 모든 파일(.md + 동반 파일)이 디스크에서 영구 삭제됩니다.")
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("⚠️ 정말 삭제", key=f"yes_{slot_id}", type="primary", use_container_width=True):
+    if st.session_state.get(confirm_key):
+        if st.button(
+            "⚠️",
+            key=f"yes_{slot_id}",
+            help="다시 누르면 영구 삭제. 다른 항목의 🗑 을 누르면 자동 취소됩니다.",
+        ):
             _delete_result(result, results)
             st.session_state.pop(confirm_key, None)
             st.rerun()
-    with c2:
-        if st.button("취소", key=f"no_{slot_id}", use_container_width=True):
-            st.session_state.pop(confirm_key, None)
+    else:
+        if st.button("🗑", key=f"del_{slot_id}", help="삭제 (한 번 더 누르면 확정)"):
+            for k in list(st.session_state.keys()):
+                if k.startswith("del_confirm_") and k != confirm_key:
+                    st.session_state.pop(k, None)
+            st.session_state[confirm_key] = True
             st.rerun()
 
 
