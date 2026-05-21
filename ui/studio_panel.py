@@ -83,7 +83,9 @@ def render() -> None:
         # 다운로드 파일 동반된 산출물은 헤더 시간 옆에 ⬇ 마커로 식별만.
         # 실제 다운로드는 expander 안의 download_button 에서 (expander 토글과
         # 시각 충돌을 피하기 위해 헤더 옆 인라인 버튼은 사용하지 않음).
-        has_files = any(Path(f).exists() for f in (result.get("files") or []))
+        md_path = result.get("md_path")
+        has_md = bool(md_path and Path(md_path).exists())
+        has_files = has_md or any(Path(f).exists() for f in (result.get("files") or []))
         dl_marker = "  ⬇" if has_files else ""
 
         col_del, col_main = st.columns([1, 30])
@@ -107,6 +109,15 @@ def render() -> None:
                             file_name=f.name,
                             key=f"dl_{slot_id}_{f.name}",
                         )
+                # md 본문도 다운로드 가능하게 (모든 산출물 공통 — 외부 도구 붙여넣기·아카이브 용).
+                if has_md:
+                    st.download_button(
+                        f"⬇ {Path(md_path).name} (markdown)",
+                        data=Path(md_path).read_bytes(),
+                        file_name=Path(md_path).name,
+                        mime="text/markdown",
+                        key=f"dl_md_{slot_id}",
+                    )
 
 
 def _render_delete_button_inline(result: dict, results: list, slot_id: str) -> None:
