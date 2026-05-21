@@ -103,28 +103,51 @@ async def _call_section(rag, instruction: str) -> list[dict]:
     return []
 
 
+def _pad4(items: list) -> list:
+    """보기/출처가 4개 미만이면 빈 문자열로 패딩."""
+    return list(items) + [""] * (4 - len(items))
+
+
 def _markdown(questions: list[dict]) -> str:
     out: list[str] = []
     for i, q in enumerate(questions, 1):
         out.append(f"### Q{i}. {q.get('question', '')}")
-        for idx, choice in enumerate(q.get("choices", []), 1):
-            out.append(f"{idx}. {choice}")
+        choices = _pad4(q.get("choices", []))
+        for idx in range(4):
+            out.append(f"{idx + 1}. {choices[idx]}")
         out.append("")
+        srcs = _pad4(q.get("choice_sources", []))
+        check_block = _check_row(srcs).replace("\n", "  \n")  # md 강제 줄바꿈
         out.append(
-            "<details><summary>정답·해설·출처</summary>\n\n"
+            "<details><summary>정답·해설·출처·검수</summary>\n\n"
             f"**정답**: {q.get('answer', '?')}\n\n"
             f"**해설**: {q.get('rationale', '')}\n\n"
             f"**출처**: {q.get('source', '')}\n\n"
+            f"**검수**:  \n{check_block}\n\n"
             "</details>"
         )
         out.append("")
     return "\n".join(out).strip()
 
 
+def _check_row(srcs: list[str]) -> str:
+    """보기별 좌표를 줄바꿈으로 나열한다.
+    예:
+        ① [p.78]
+        ② [p.78 (결구 불량 관련)]
+        ③ [p.78 (착과 불량 선택지 변형)]
+        ④ [p.78 (종자 발아 불량 선택지 변형)]
+    """
+    marks = "①②③④"
+    return "\n".join(f"{marks[k]} [{srcs[k]}]" for k in range(4) if srcs[k])
+
+
 def _xlsx_rows(questions: list[dict]) -> list[list]:
+    """xlsx 행. 보기 셀에는 본문만. 검수 컬럼에 선지별 좌표."""
     rows: list[list] = []
     for i, q in enumerate(questions, 1):
-        choices = list(q.get("choices", [])) + ["", "", "", ""]
+        choices = _pad4(q.get("choices", []))
+        srcs = _pad4(q.get("choice_sources", []))
         rows.append([
             i,
             q.get("question", ""),
@@ -132,8 +155,81 @@ def _xlsx_rows(questions: list[dict]) -> list[list]:
             q.get("answer", ""),
             q.get("rationale", ""),
             q.get("source", ""),
+            _check_row(srcs),
         ])
     return rows
+
+
+def _write_docx(path: Path, questions: list[dict], deck_title: str) -> Path:
+    """문항 1개당 표 1개로 docx 출력. 검수자 친화적 카드 형식.
+
+    표 구조 (10행 2열):
+      행1:  Q01    [종합 출처]            (병합 + bold 헤더)
+      행2:  문제   | (질문 본문)
+      행3~6: ①~④  | (보기 본문만, 좌표 없음)
+      행7:  정답   | 1~4
+      행8:  해설   | (보기별 거짓 부분 + 함정 패턴)
+      행9:  출처   | (단원명·페이지 종합)
+      행10: 검수   | ① p.78  ② p.79  ③ p.80  ④ p.78 (선지별 좌표 모아두기)
+    """
+    from docx import Document
+    from docx.shared import Pt
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc = Document()
+    doc.add_heading(deck_title, level=1)
+    sub = doc.add_paragraph()
+    sub.add_run(
+        f"총 {len(questions)}문항 · 4지선다 + 정답 + 해설 + 출처"
+    ).italic = True
+    doc.add_paragraph()
+
+    for i, q in enumerate(questions, 1):
+        choices = _pad4(q.get("choices", []))
+        srcs = _pad4(q.get("choice_sources", []))
+        table = doc.add_table(rows=10, cols=2)
+        try:
+            table.style = "Light Grid Accent 1"
+        except (KeyError, AttributeError):
+            pass  # 스타일 없으면 기본
+
+        # 헤더 행 (병합)
+        hdr_left, hdr_right = table.rows[0].cells
+        hdr = hdr_left.merge(hdr_right)
+        hdr.text = ""
+        run = hdr.paragraphs[0].add_run(
+            f"Q{i:02d}    {q.get('source', '')}"
+        )
+        run.bold = True
+        run.font.size = Pt(12)
+
+        body = [
+            ("문제", q.get("question", "")),
+            ("①", choices[0]),
+            ("②", choices[1]),
+            ("③", choices[2]),
+            ("④", choices[3]),
+            ("정답", str(q.get("answer", ""))),
+            ("해설", q.get("rationale", "")),
+            ("출처", q.get("source", "")),
+            ("검수", _check_row(srcs)),
+        ]
+        for ri, (label, content) in enumerate(body, 1):
+            c0 = table.rows[ri].cells[0]
+            c1 = table.rows[ri].cells[1]
+            c0.text = label
+            # 셀 내 줄바꿈은 paragraph 분리로 처리 (cell.text 에 \n 넣으면 한 줄로 표시됨)
+            lines = (content or "").split("\n") if content else [""]
+            c1.text = lines[0]
+            for line in lines[1:]:
+                c1.add_paragraph(line)
+            for run in c0.paragraphs[0].runs:
+                run.bold = True
+
+        doc.add_paragraph()  # 문항 사이 빈 줄
+
+    doc.save(path)
+    return path
 
 
 async def generate(rag, context: dict) -> ArtifactResult:
@@ -212,17 +308,27 @@ async def generate(rag, context: dict) -> ArtifactResult:
     artifacts_dir = context.get("artifacts_dir")
     if artifacts_dir and questions:
         out_dir = Path(artifacts_dir) / META.key
+        stamp = int(time.time())
         try:
             xlsx_path = write_table_xlsx(
-                out_dir / f"quiz_high_{int(time.time())}.xlsx",
+                out_dir / f"quiz_high_{stamp}.xlsx",
                 headers=["#", "문제", "보기1", "보기2", "보기3", "보기4",
-                         "정답", "해설", "출처"],
+                         "정답", "해설", "출처", "검수"],
                 rows=_xlsx_rows(questions),
                 sheet_name="고난도 30문제",
             )
             files.append(xlsx_path)
         except Exception as e:
             print(f"[quiz_high] xlsx 생성 실패: {e}", flush=True)
+        try:
+            docx_path = _write_docx(
+                out_dir / f"quiz_high_{stamp}.docx",
+                questions,
+                deck_title=f"고난도 {len(questions)}문제",
+            )
+            files.append(docx_path)
+        except Exception as e:
+            print(f"[quiz_high] docx 생성 실패: {e}", flush=True)
 
     return ArtifactResult(
         key=META.key,
