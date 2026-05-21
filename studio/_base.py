@@ -29,6 +29,7 @@ class ArtifactMeta:
     model_profile: str = "strong"   # core.llm_client.get_llm_func 와 일치
     accepts: tuple[str, ...] = ("text", "subtitle", "media")
     description: str = ""
+    hidden: bool = False  # True 이면 환경변수 STUDIO_VISIBLE 에 명시될 때만 노출
 
 
 @dataclass
