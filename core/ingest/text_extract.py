@@ -9,17 +9,23 @@ from pathlib import Path
 
 
 def pdf_to_text(path: Path) -> str:
-    from pypdf import PdfReader
+    """PyMuPDF(fitz) 기반. pypdf 대비 10~50배 빠르고 레이아웃 보존이 우수.
+    라이선스: AGPL v3 + Artifex 상용 듀얼 — 사내 사용 OK 결정 (2026-05-22).
+    """
+    import fitz  # PyMuPDF
 
-    reader = PdfReader(str(path))
+    doc = fitz.open(str(path))
     parts: list[str] = []
-    for page in reader.pages:
-        try:
-            t = page.extract_text() or ""
-        except Exception:
-            t = ""
-        if t.strip():
-            parts.append(t)
+    try:
+        for page in doc:
+            try:
+                t = page.get_text() or ""
+            except Exception:
+                t = ""
+            if t.strip():
+                parts.append(t)
+    finally:
+        doc.close()
     return "\n\n".join(parts).strip()
 
 
