@@ -30,6 +30,11 @@ META = ArtifactMeta(
 
 LLMFunc = Callable[..., Awaitable[str]]
 
+# N >= CHUNK_THRESHOLD 이면 그룹별 분할 호출(LiteLLM 60초 천장 회피).
+# PPTX 보고서 default(6장) 같은 작은 케이스는 단발 호출 유지.
+CHUNK_THRESHOLD = 10
+GROUP_SIZE = 4
+
 # ── 고정 디자인 테마 ─────────────────────────────────────────────────
 # 비즈니스 친화 컬러. 필요 시 한 곳만 바꾸면 전체 슬라이드에 반영.
 THEME = {
@@ -90,6 +95,8 @@ async def make_slides_lite(
     prompt_key: prompts/<key>_ko.md 를 읽는다. PPTX 보고서는 "slides",
     슬라이드 교안(텍스트) 는 "slide_outline" 로 분리.
 
+    N >= CHUNK_THRESHOLD 이면 자동으로 그룹별 분할 호출 → 병합. 그 이하는 단발 호출.
+
     Returns: {"title", "subtitle", "slides":[{title, bullets, speaker_notes, keywords}], "markdown": "..."}
     """
     clean = (
@@ -99,34 +106,135 @@ async def make_slides_lite(
     )
 
     prompt_tpl = load_prompt(prompt_key) or (
-        "다음 강의 자막을 바탕으로 {{N}}개의 슬라이드로 정리하라."
+        "다음 강의 자막을 바탕으로 {{N}}개의 슬라이드로 정리하라.\n\n{{GROUP_SPEC}}"
     )
-    prompt = (
-        prompt_tpl.replace("{{N}}", str(slides))
-        .replace("{{N-1}}", str(slides - 1))
-        + "\n\n[메타데이터]\n"
-        + json.dumps(metadata or {}, ensure_ascii=False)
-        + "\n\n[자막]\n"
-        + clean
-    )
-
     caller = llm_call or get_llm_func("creative")
-    raw = await caller(prompt)
-    payload = _strip_fence(raw)
-    try:
-        bundle = json.loads(payload)
-    except json.JSONDecodeError:
-        bundle = {
-            "title": "파싱 실패",
-            "subtitle": "",
-            "slides": [{"title": "원본", "bullets": [raw[:200]], "speaker_notes": "", "keywords": []}],
-        }
+
+    if slides < CHUNK_THRESHOLD:
+        bundle = await _call_slide_group(
+            caller, prompt_tpl, clean, metadata,
+            total=slides, start=0, end=slides, prior_titles=[],
+        )
+    else:
+        bundle = await _call_slides_grouped(
+            caller, prompt_tpl, clean, metadata, total=slides,
+        )
 
     bundle.setdefault("title", "발표 자료")
     bundle.setdefault("subtitle", "")
     bundle.setdefault("slides", [])
     bundle["markdown"] = _to_markdown_preview(bundle)
     return bundle
+
+
+def _build_prompt(
+    prompt_tpl: str,
+    total: int,
+    group_spec: str,
+    metadata: dict | None,
+    clean: str,
+) -> str:
+    return (
+        prompt_tpl.replace("{{N}}", str(total))
+        .replace("{{N-1}}", str(total - 1))
+        .replace("{{GROUP_SPEC}}", group_spec)
+        + "\n\n[메타데이터]\n"
+        + json.dumps(metadata or {}, ensure_ascii=False)
+        + "\n\n[자막]\n"
+        + clean
+    )
+
+
+async def _call_slide_group(
+    caller: LLMFunc,
+    prompt_tpl: str,
+    clean: str,
+    metadata: dict | None,
+    *,
+    total: int,
+    start: int,
+    end: int,
+    prior_titles: list[str],
+) -> dict:
+    """한 그룹(start+1 ~ end번 슬라이드)을 만든다.
+    분할 모드가 아닌 경우(start=0, end=total, prior_titles=[]) 그룹 컨텍스트는 비어있다.
+    """
+    if end - start == total and not prior_titles:
+        group_spec = ""
+    else:
+        prior_block = (
+            "이미 작성된 슬라이드 제목 목록 (중복 금지):\n"
+            + "\n".join(f"  {i+1}. {t}" for i, t in enumerate(prior_titles))
+            if prior_titles else
+            "이전에 작성된 슬라이드 없음 (이번이 첫 그룹)."
+        )
+        group_spec = (
+            "[분할 생성 모드]\n"
+            f"전체 {total}장 중 **{start+1}~{end}번** 슬라이드만 작성하라 "
+            f"(이번 그룹은 {end-start}장).\n"
+            f"슬라이드 위치별 규칙(개요/평가 등)은 전체 {total}장 기준으로 따른다.\n"
+            f"{prior_block}\n"
+            "출력 JSON 의 `slides` 배열에는 **이번 그룹의 슬라이드만** 담아라. "
+            "title/subtitle 도 채워라 (병합 시 첫 그룹 값만 채택됨)."
+        )
+
+    prompt = _build_prompt(prompt_tpl, total, group_spec, metadata, clean)
+    raw = await caller(prompt)
+    payload = _strip_fence(raw)
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        return {
+            "title": "파싱 실패",
+            "subtitle": "",
+            "slides": [{
+                "title": f"파싱 실패 ({start+1}~{end}장)",
+                "bullets": [raw[:200]],
+                "speaker_notes": "",
+                "keywords": [],
+            }],
+        }
+
+
+async def _call_slides_grouped(
+    caller: LLMFunc,
+    prompt_tpl: str,
+    clean: str,
+    metadata: dict | None,
+    *,
+    total: int,
+) -> dict:
+    """분할 모드 — GROUP_SIZE 장씩 직렬 호출 후 병합. 직렬 유지 이유: 이전 그룹의
+    제목 목록을 다음 호출에 넘겨 중복/흐름 문제를 방지."""
+    merged: list[dict] = []
+    first: dict | None = None
+    total_groups = (total + GROUP_SIZE - 1) // GROUP_SIZE
+    print(f"[Slides] 분할 모드 시작: 전체 {total}장 = {total_groups}회 호출")
+    for idx, start in enumerate(range(0, total, GROUP_SIZE), 1):
+        end = min(start + GROUP_SIZE, total)
+        print(f"[Slides] 분할 {idx}/{total_groups} 시작 ({start+1}~{end}번)")
+        group = await _call_slide_group(
+            caller, prompt_tpl, clean, metadata,
+            total=total, start=start, end=end,
+            prior_titles=[s.get("title", "") for s in merged],
+        )
+        got = len(group.get("slides") or [])
+        print(f"[Slides] 분할 {idx}/{total_groups} 완료 (슬라이드 {got}장 수신)")
+        if first is None:
+            first = group
+        for s in (group.get("slides") or []):
+            merged.append(s)
+            if len(merged) >= total:
+                break
+        if len(merged) >= total:
+            break
+
+    print(f"[Slides] 분할 모드 완료: 총 {len(merged)}장 병합")
+    return {
+        "title": (first or {}).get("title", "발표 자료"),
+        "subtitle": (first or {}).get("subtitle", ""),
+        "slides": merged[:total],
+    }
 
 
 # ── PPTX 렌더링 ───────────────────────────────────────────────────────
