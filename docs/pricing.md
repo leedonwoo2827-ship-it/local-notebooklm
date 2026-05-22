@@ -11,17 +11,15 @@
 | 프로파일 | 기본 모델 | 입력 \$/1M | 출력 \$/1M | 호출 1회당 (입력 5K + 출력 1K 기준) |
 |---|---|---:|---:|---:|
 | `MODEL_CHAT` | `deepseek-v4-flash` | $0.20 | $1.00 | $0.002 |
-| `MODEL_EXTRACT` | `deepseek-v4-flash` | $0.20 | $1.00 | $0.002 |
+| `MODEL_EXTRACT` | `gpt-5.4-mini` | $0.25 | $2.00 | $0.003 |
 | `MODEL_STRONG` | `claude-sonnet-4-6` | $3.00 | $15.00 | $0.030 |
 | `MODEL_CREATIVE` | `claude-sonnet-4-6` | $3.00 | $15.00 | $0.030 |
 
 선정 이유:
 - **CHAT** — 가장 호출이 잦고 1M 컨텍스트 필요. DeepSeek-flash 가 가성비 최적.
-- **EXTRACT** — LightRAG `extract_entities` 는 평문 응답 + `json_repair.loads()`
-  자체 파싱 경로 (`lightrag/operate.py:2962-2970`). `response_format`/JSON schema 를
-  강제하지 않으므로 DeepSeek 사용 가능. 인덱싱 호출 빈도가 매우 높아 단가 차이가
-  누적되므로 가장 저렴한 DeepSeek-flash 채택. (이전에 "DeepSeek 불가" 라고 적혀
-  있던 건 2026-05 이전 LightRAG 버전 기준의 오래된 정보였음.)
+- **EXTRACT** — LightRAG 인덱싱은 `response_format = json_schema` 를 쓴다.
+  DeepSeek 는 이 기능 미지원 → 반드시 OpenAI/Claude 계열 필요. `gpt-5.4-mini`
+  가 카탈로그에서 가장 싸면서 JSON schema 지원.
 - **STRONG / CREATIVE** — Studio 산출물(슬라이드 교안, 카드뉴스, HWPX 보고서)
   은 한국어 작문 품질이 결과물 가치를 좌우. Claude Sonnet 가 사실상 표준.
 
@@ -225,30 +223,21 @@
 
 ## ⚠️ 알려진 모델 제약
 
-### ~~DeepSeek 는 `MODEL_EXTRACT` 에 쓸 수 없다~~ → **정정**: 쓸 수 있다
+### DeepSeek 는 `MODEL_EXTRACT` 에 쓸 수 없다
 
-**2026-05-22 재검증.** 이 단락에 이전에 적혀있던 "DeepSeek 가 MODEL_EXTRACT 에
-못 쓰인다"는 주장은 **오래된 정보**였다. 실제 LightRAG 의 entity 추출 경로는
-JSON schema 를 강제하지 않는다:
+LightRAG 는 entity 추출 단계에서 OpenAI 호환 API 의
+`response_format = {"type": "json_schema", ...}` 기능을 사용한다.
+**DeepSeek-v4 계열은 이 기능을 지원하지 않아 400 에러를 반환** 한다:
 
-- `extract_entities` 는 LLM 의 **평문 응답을 받아 `json_repair.loads()` 로 자체
-  파싱** 한다 (`.venv/Lib/site-packages/lightrag/operate.py:2962-2970`).
-- `response_format` 이 활성화되는 곳은 **쿼리 단계 `extract_keywords`** 뿐
-  (`operate.py:3465`). 이 경로는 `MODEL_CHAT` 이 담당하므로 EXTRACT 와 무관.
-- 즉 `ENABLE_MINERU=false` (OCR off) 경로에서 `MODEL_EXTRACT=deepseek-v4-flash`
-  가 정상 동작한다 — 이 레포의 기본 매핑이 이미 그렇게 잡혀 있다.
+```
+litellm.BadRequestError: DeepseekException -
+  "This response_format type is unavailable now"
+```
 
-이 레포 기본 매핑이 DeepSeek 인 이유: 인덱싱은 chunk 1개당 LLM 호출 1회 + Phase 2
-merge 호출 다수가 발생해 호출 총량이 매우 크다. 단가가 낮은 DeepSeek 가 누적 비용
-차이를 가장 크게 가져온다 (책 1권 530쪽 기준 약 1,100원 절감).
-
-> ⚠️ **단 MinerU 멀티모달 경로**(`process_document_complete`, `ENABLE_MINERU=true`)
-> 는 별도 검증이 필요하다 — 이 경로는 이미지/표 OCR 단계에서 다른 LLM 인터페이스를
-> 쓸 가능성이 있다. 본 앱은 기본적으로 `ENABLE_MINERU=false` 라 해당 위험 없음.
-
-DeepSeek 가 만에 하나 응답 형식을 약간 다르게 줘서 `json_repair` 가 파싱 못 하는
-경우(entity 갯수 급감) 의 fallback: `MODEL_EXTRACT=claude-haiku-4-5` (입력 $1/M
-출력 $5/M, 안정성 ↑, 비용 약 3배).
+→ `MODEL_EXTRACT` 만큼은 **`gpt-5.4-mini`(권장) / `claude-haiku-4-5` /
+`gemini-3-flash-preview`** 중 하나로 둬야 한다.
+`MODEL_CHAT` · `MODEL_CREATIVE` · `MODEL_STRONG` 은 DeepSeek 사용 가능
+(우리 코드가 JSON 모드를 안 쓰는 영역).
 
 ### LiteLLM 60초 천장 (앞서 설명한 그것)
 
@@ -263,13 +252,12 @@ DeepSeek 가 만에 하나 응답 형식을 약간 다르게 줘서 `json_repair
 
 ```
 MODEL_CHAT=deepseek-v4-flash      # 채팅 — DeepSeek 저렴
-MODEL_EXTRACT=deepseek-v4-flash   # ⭐ 인덱싱 — extract_entities 는 평문 파싱이라 DeepSeek OK
+MODEL_EXTRACT=gpt-5.4-mini        # ⭐ 인덱싱 — JSON schema 필요
 MODEL_STRONG=claude-sonnet-4-6    # 보고서/심층 Q&A
 MODEL_CREATIVE=claude-sonnet-4-6  # Studio 산출물(슬라이드/카드뉴스)
 ```
 
 → 한국어 산출물 품질과 비용의 균형. 일반 사용자 디폴트.
-→ 책 1권(530쪽) 인덱싱 약 $0.92 ≈ 1,300원 (이전 gpt-5.4-mini $1.69 ≈ 2,400원에서 1,100원 절감).
 
 ### 2. 저렴 모드 (산출물 품질 양보)
 
